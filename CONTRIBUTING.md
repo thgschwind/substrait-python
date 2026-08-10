@@ -66,11 +66,29 @@ uv run pytest
 
 Narrow the run with a path or `-k` while iterating, e.g. `uv run pytest tests/dataframe -k lateral`.
 
-A clean run still reports skips. Those are the round-trips through external consumers in [`tests/sql`](tests/sql), skipped by default rather than for a missing dependency: those consumers lag the pinned spec, and handing them a plan built at a newer spec version can abort the interpreter natively. Opt in with `SUBSTRAIT_ENGINE_TESTS=1 uv run pytest` when you want them.
+A clean run does not cover everything: the round-trips through DuckDB and DataFusion are left out by default, because those consumers lag the pinned spec. `pytest` reports them as `deselected` rather than as skips — see [Integration tests](#integration-tests) below for how to opt in.
 
 The [examples](examples) run standalone, e.g. `uv run examples/builder_example.py`. CI runs four of them — `builder`, `duckdb`, `adbc`, `pyarrow` — on every PR ([`example.yml`](.github/workflows/example.yml)); `dataframe_example.py` and `narwhals_example.py` are outside that matrix, so changes to the DataFrame or Narwhals layers need those run by hand. Several examples are [PEP 723](https://peps.python.org/pep-0723/) scripts (a `# /// script` block declaring their own dependencies), which `uv run` executes in a separate environment built from the working tree rather than in your synced `.venv`.
 
 Tests run in CI ([`test.yml`](.github/workflows/test.yml)) as `uv run --frozen pytest` across Python 3.10–3.13 on Linux, macOS and Windows. Because of `--frozen`, a change to dependencies has to land together with a regenerated [`uv.lock`](uv.lock) — and [`pixi.lock`](pixi.lock) when it affects the lint environment — or CI will fail on the stale lock file rather than on your change.
+
+### Integration tests
+
+[`tests/integration`](tests/integration) holds the tests that run against third-party Substrait implementations, which release on their own schedule: pyarrow as a producer whose output this library consumes, and DuckDB and DataFusion as consumers of the plans it builds.
+
+The default (`addopts` in [`pyproject.toml`](pyproject.toml)) deselects `duckdb` and `datafusion`, so a plain `uv run pytest` — and CI — leaves them out: handing a lagging consumer a plan built at a newer spec version can crash the interpreter natively, which no test run can report, so a red result there is not even reliably a report. **pyarrow runs by default** — it produces rather than consumes, so it cannot take the process down, and it is the only place that would notice pyarrow's output shape drifting away from what the extension-anchor handling assumes.
+
+Select with `-m`:
+
+```
+uv run pytest -m integration                     # every integration test
+uv run pytest -m duckdb                          # just one integration type
+uv run pytest -m "integration and not duckdb"    # everything except one
+```
+
+Mind that `-m` **replaces** the default expression rather than narrowing it, so a `-m` you meant as a restriction can widen the selection: `-m "not pyarrow"` re-enables DuckDB and DataFusion, which is the one thing the default exists to prevent. To drop pyarrow for a single run, skip `-m` and use `uv run pytest --ignore=tests/integration/test_pyarrow_producer.py`; to drop it for good, add `and not pyarrow` to the `addopts`. Naming a path does not select a deselected marker either — `uv run pytest tests/integration/` still reports the engine tests as `deselected` until you pass a `-m`.
+
+The per-type markers are `pyarrow`, `duckdb`, and `datafusion`; each integration test carries `integration` plus its own, so any one of them can be switched on or off independently as those projects catch up. If a pyarrow release starts failing, add `and not pyarrow` to the `addopts` rather than deleting the tests — they record what changed. New tests in `tests/integration/` need both markers, and any new marker has to be registered in `[tool.pytest.ini_options]`.
 
 ## Commit conventions
 

@@ -1,6 +1,25 @@
 Release Notes
 ---
 
+## [0.31.0](https://github.com/substrait-io/substrait-python/compare/v0.30.0...v0.31.0) (2026-08-16)
+
+### ⚠ BREAKING CHANGES
+
+* emitted extension anchors are numbered per plan, so
+plans compared byte-for-byte against output from an earlier release will
+differ. Anchors are plan-local by spec, so plan semantics are
+unaffected. `ExtensionRegistry.lookup_urn` and `FunctionEntry.anchor`
+are removed; use `has_urn()` / `urns()` for URN membership, and
+`(entry.urn, str(entry))` as a function's durable identity.
+`ExtensionCollector.adopt` raises on an input declaring two different
+functions at one anchor, and `aggregate` raises on a measure that is not
+an aggregate function; both previously produced a plan with an ambiguous
+or dangling function reference.
+
+### Features
+
+* assign extension anchors per plan, not per registry ([#245](https://github.com/substrait-io/substrait-python/issues/245)) ([4834cae](https://github.com/substrait-io/substrait-python/commit/4834cae77acf248330faae6cef2f8de2d8d58156))
+
 ## [0.30.0](https://github.com/substrait-io/substrait-python/compare/v0.29.0...v0.30.0) (2026-07-29)
 
 ### ⚠ BREAKING CHANGES

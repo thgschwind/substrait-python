@@ -19,31 +19,25 @@ order) -- NOT into ``ScalarFunction.options``, which carries only *behavioral*
 options (``overflow``, ``rounding``, ...). Consumers such as DuckDB read enum
 selections exclusively from ``arguments``.
 
-These tests demonstrate two defects in the current DataFrame / builder pipeline:
+These tests guard two properties of the DataFrame / builder pipeline:
 
-1. **Resolution.** ``sub.f.extract(col, component="YEAR")`` cannot be built at
-   all: the overload's arity counts the enum positions, but the signature handed
-   to the registry contains only the value operands, so the arity check never
-   matches and resolution raises ``Unknown function extract``.
-2. **Serialization.** Even once it resolves, the enum selection must land in
-   ``arguments`` as a ``FunctionArgument.enum``. Routing it into ``options``
-   (as the current ``**options`` kwarg path would) produces a plan that omits
-   the enum from ``arguments`` -- which DuckDB's consumer then reads as an empty
-   enum vector and crashes on.
+1. **Resolution.** ``sub.f.extract(col, component="YEAR")`` must build. The
+   overload's arity counts the enum positions, so the registry has to fold the
+   enum selection into the signature it matches -- otherwise the value-only
+   signature never matches and resolution raises ``Unknown function extract``.
+2. **Serialization.** The enum selection must land in ``arguments`` as a
+   ``FunctionArgument.enum``, not in ``options``. Routing it into ``options``
+   produces a plan that omits the enum from ``arguments`` -- which DuckDB's
+   consumer then reads as an empty enum vector and crashes on.
 
-They are marked ``xfail(strict=True)``: they fail today and must flip to passing
-(and lose the marker) when enum-argument support lands. The call site here --
-enum selections passed as keyword arguments -- is the user-facing API and is
-independent of how resolution is implemented internally.
+The call site here -- enum selections passed as keyword arguments -- is the
+user-facing API and is independent of how resolution is implemented internally.
 """
 
-import pytest
 import substrait.algebra_pb2 as stalg
 
 import substrait.dataframe as sub
 from substrait.builders.type import precision_timestamp
-
-_NOT_YET = "enumeration-argument functions are not resolved/serialized yet"
 
 
 def _scalar_functions(message) -> list:
@@ -79,7 +73,6 @@ def _arg_kinds(scalar_function) -> list:
     return [a.WhichOneof("arg_type") for a in scalar_function.arguments]
 
 
-@pytest.mark.xfail(strict=True, reason=_NOT_YET)
 def test_extract_with_a_single_enum_argument_resolves():
     """The two-argument ``extract(component, date)`` overload must build."""
     df = sub.read_named_table("t", {"d": sub.date})
@@ -93,7 +86,6 @@ def test_extract_with_a_single_enum_argument_resolves():
     assert extract, "extract did not resolve to a registry function"
 
 
-@pytest.mark.xfail(strict=True, reason=_NOT_YET)
 def test_extract_serializes_the_enum_as_an_argument_not_an_option():
     """component=YEAR must be a FunctionArgument.enum, in signature position.
 
@@ -116,7 +108,6 @@ def test_extract_serializes_the_enum_as_an_argument_not_an_option():
     )
 
 
-@pytest.mark.xfail(strict=True, reason=_NOT_YET)
 def test_extract_day_of_month_carries_both_enum_arguments():
     """The exact combination behind the reported DuckDB crash.
 

@@ -251,7 +251,7 @@ def _resolve_over_urns(
         for b in bound
         for typ in infer_extended_expression_schema(b, registry=registry).types
     ]
-    match = registry.find_function(name, signature, urns)
+    match = registry.find_function(name, signature, urns, options=options)
     if match is not None:
         winning_urn = match[0].urn
         return builder(

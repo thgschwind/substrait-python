@@ -83,6 +83,36 @@ def _function_options(options):
     return result
 
 
+def _function_arguments(func_entry, bound_expressions, options):
+    """Interleave value operands and enumeration selections into FunctionArguments.
+
+    Value operands come from ``bound_expressions`` (positional), enumeration
+    selections from ``options`` (by argument name). ``func_entry`` weaves them
+    into declared signature order -- enum selections as ``FunctionArgument.enum``,
+    values as ``FunctionArgument.value``. Returns ``(arguments, options)`` where
+    the second element is the options *not* consumed as enumeration arguments
+    (i.e. the behavioral options destined for ``FunctionOption``).
+    """
+    value_args = (
+        stalg.FunctionArgument(value=e.referred_expr[0].expression)
+        for e in bound_expressions
+    )
+    plan = func_entry.interleave_arguments(value_args, options)
+    if plan is None:
+        # Resolution already matched this overload, so interleaving should not
+        # fail; fall back to the value-only form rather than lose the operands.
+        return [
+            stalg.FunctionArgument(value=e.referred_expr[0].expression)
+            for e in bound_expressions
+        ], options
+    ordered, behavioral_options = plan
+    arguments = [
+        stalg.FunctionArgument(enum=selection) if kind == "enum" else selection
+        for kind, selection in ordered
+    ]
+    return arguments, behavioral_options
+
+
 def resolve_expression(
     expression: ExtendedExpressionOrUnbound,
     base_schema: stp.NamedStruct,
@@ -581,12 +611,16 @@ def scalar_function(
 
         signature = [typ for es in expression_schemas for typ in es.types]
 
-        func = registry.lookup_function(urn, function, signature)
+        func = registry.lookup_function(urn, function, signature, options=options)
 
         if not func:
             raise Exception(f"Unknown function {function} for {signature}")
 
         func_ref = function_reference(urn, str(func[0]))
+
+        arguments, behavioral_options = _function_arguments(
+            func[0], bound_expressions, options
+        )
 
         return stee.ExtendedExpression(
             referred_expr=[
@@ -594,13 +628,8 @@ def scalar_function(
                     expression=stalg.Expression(
                         scalar_function=stalg.Expression.ScalarFunction(
                             function_reference=func_ref,
-                            arguments=[
-                                stalg.FunctionArgument(
-                                    value=e.referred_expr[0].expression
-                                )
-                                for e in bound_expressions
-                            ],
-                            options=_function_options(options),
+                            arguments=arguments,
+                            options=_function_options(behavioral_options),
                             output_type=func[1],
                         )
                     ),
@@ -654,23 +683,24 @@ def aggregate_function(
 
         signature = [typ for es in expression_schemas for typ in es.types]
 
-        func = registry.lookup_function(urn, function, signature)
+        func = registry.lookup_function(urn, function, signature, options=options)
 
         if not func:
             raise Exception(f"Unknown function {function} for {signature}")
 
         func_ref = function_reference(urn, str(func[0]))
 
+        arguments, behavioral_options = _function_arguments(
+            func[0], bound_expressions, options
+        )
+
         return stee.ExtendedExpression(
             referred_expr=[
                 stee.ExpressionReference(
                     measure=stalg.AggregateFunction(
                         function_reference=func_ref,
-                        arguments=[
-                            stalg.FunctionArgument(value=e.referred_expr[0].expression)
-                            for e in bound_expressions
-                        ],
-                        options=_function_options(options),
+                        arguments=arguments,
+                        options=_function_options(behavioral_options),
                         output_type=func[1],
                         invocation=invocation
                         if invocation is not None
@@ -724,12 +754,16 @@ def window_function(
 
         signature = [typ for es in expression_schemas for typ in es.types]
 
-        func = registry.lookup_function(urn, function, signature)
+        func = registry.lookup_function(urn, function, signature, options=options)
 
         if not func:
             raise Exception(f"Unknown function {function} for {signature}")
 
         func_ref = function_reference(urn, str(func[0]))
+
+        arguments, behavioral_options = _function_arguments(
+            func[0], bound_expressions, options
+        )
 
         return stee.ExtendedExpression(
             referred_expr=[
@@ -737,13 +771,8 @@ def window_function(
                     expression=stalg.Expression(
                         window_function=stalg.Expression.WindowFunction(
                             function_reference=func_ref,
-                            arguments=[
-                                stalg.FunctionArgument(
-                                    value=e.referred_expr[0].expression
-                                )
-                                for e in bound_expressions
-                            ],
-                            options=_function_options(options),
+                            arguments=arguments,
+                            options=_function_options(behavioral_options),
                             output_type=func[1],
                             partitions=[
                                 e.referred_expr[0].expression for e in bound_partitions

@@ -189,9 +189,7 @@ class ExtensionRegistry:
         the base arithmetic extension over its decimal variant -- needs one call
         rather than a per-URN ``lookup_function`` loop.
         """
-        matches = self._find_matching_functions(
-            function_name, signature, urns, options
-        )
+        matches = self._find_matching_functions(function_name, signature, urns, options)
         return matches[0] if matches else None
 
     def has_urn(self, urn: str) -> bool:

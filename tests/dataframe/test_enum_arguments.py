@@ -81,7 +81,9 @@ def test_extract_with_a_single_enum_argument_resolves():
     plan = df.with_columns(y=sub.f.extract(sub.col("d"), component="YEAR")).to_plan()
 
     (extract,) = [
-        sf for sf in _scalar_functions(plan) if _function_name(plan, sf).startswith("extract")
+        sf
+        for sf in _scalar_functions(plan)
+        if _function_name(plan, sf).startswith("extract")
     ]
     assert extract, "extract did not resolve to a registry function"
 
@@ -97,7 +99,9 @@ def test_extract_serializes_the_enum_as_an_argument_not_an_option():
     plan = df.with_columns(y=sub.f.extract(sub.col("d"), component="YEAR")).to_plan()
 
     (extract,) = [
-        sf for sf in _scalar_functions(plan) if _function_name(plan, sf).startswith("extract")
+        sf
+        for sf in _scalar_functions(plan)
+        if _function_name(plan, sf).startswith("extract")
     ]
     assert _arg_kinds(extract) == ["enum", "value"], (
         f"enum not carried in arguments in signature order: {_arg_kinds(extract)}"
@@ -122,7 +126,9 @@ def test_extract_day_of_month_carries_both_enum_arguments():
     ).to_plan()
 
     (extract,) = [
-        sf for sf in _scalar_functions(plan) if _function_name(plan, sf).startswith("extract")
+        sf
+        for sf in _scalar_functions(plan)
+        if _function_name(plan, sf).startswith("extract")
     ]
     assert _arg_kinds(extract) == ["enum", "enum", "value"], _arg_kinds(extract)
     assert [extract.arguments[0].enum, extract.arguments[1].enum] == ["DAY", "ONE"]
